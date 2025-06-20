@@ -1,0 +1,82 @@
+{
+  "name": "bahinlink-admin-portal",
+  "version": "1.0.0",
+  "description": "BahinLink Admin Portal - Security Workforce Management Dashboard",
+  "private": true,
+  "dependencies": {
+    "@clerk/clerk-react": "^5.32.0",
+    "@clerk/types": "^4.60.1",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.14.3",
+    "@mui/material": "^5.14.5",
+    "@mui/x-charts": "^6.0.0-alpha.18",
+    "@mui/x-data-grid": "^6.10.1",
+    "@mui/x-date-pickers": "^6.10.1",
+    "@react-google-maps/api": "^2.20.7",
+    "@reduxjs/toolkit": "^1.9.5",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^14.4.3",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.39",
+    "@types/react": "^18.2.17",
+    "@types/react-beautiful-dnd": "^13.1.8",
+    "@types/react-big-calendar": "^1.16.2",
+    "@types/react-dom": "^18.2.7",
+    "@types/socket.io-client": "^1.4.36",
+    "axios": "^1.5.0",
+    "date-fns": "^2.30.0",
+    "leaflet": "^1.9.4",
+    "moment": "^2.30.1",
+    "react": "^18.2.0",
+    "react-beautiful-dnd": "^13.1.1",
+    "react-big-calendar": "^1.19.4",
+    "react-dom": "^18.2.0",
+    "react-leaflet": "^4.2.1",
+    "react-redux": "^8.1.2",
+    "react-router-dom": "^6.14.2",
+    "react-scripts": "5.0.1",
+    "recharts": "^2.7.2",
+    "socket.io-client": "^4.8.1",
+    "typescript": "^4.9.5",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "cross-env GENERATE_SOURCEMAP=false react-scripts start",
+    "start:fast": "cross-env SKIP_PREFLIGHT_CHECK=true GENERATE_SOURCEMAP=false TSC_COMPILE_ON_ERROR=true react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "type-check": "tsc --noEmit"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/leaflet": "^1.9.4",
+    "@types/ms": "^2.1.0",
+    "@typescript-eslint/eslint-plugin": "^6.4.0",
+    "@typescript-eslint/parser": "^6.4.0",
+    "eslint": "^8.47.0"
+  },
+  "proxy": "http://localhost:3000"
+}

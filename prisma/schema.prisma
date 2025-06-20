@@ -1,0 +1,1450 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  AGENT
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum SiteStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  CLOSED
+}
+
+enum ShiftType {
+  REGULAR
+  OVERTIME
+  EMERGENCY
+  TRAINING
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AttendanceMethod {
+  GPS
+  QR_CODE
+  MANUAL
+  NFC
+}
+
+enum AttendanceStatus {
+  CLOCKED_IN
+  ON_BREAK
+  CLOCKED_OUT
+  INCOMPLETE
+}
+
+enum ReportType {
+  PATROL
+  INCIDENT
+  INSPECTION
+  MAINTENANCE
+  EMERGENCY
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum ReportPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  URGENT
+  EMERGENCY
+  SYSTEM
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  SMS
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  LOCATION
+  FILE
+}
+
+enum MessagePriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum RequestType {
+  ADDITIONAL_PATROL
+  EMERGENCY_RESPONSE
+  MAINTENANCE
+  CONSULTATION
+  OTHER
+}
+
+enum RequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RequestStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum TimeOffType {
+  VACATION
+  SICK
+  PERSONAL
+  EMERGENCY
+  BEREAVEMENT
+  JURY_DUTY
+  MILITARY
+  OTHER
+}
+
+enum TimeOffStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AssignmentMethod {
+  MANUAL
+  AUTO
+  INTELLIGENT_AUTO
+  EMERGENCY_AUTO
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+  CRITICAL
+}
+
+// Core Models
+model User {
+  id                  String    @id @default(uuid())
+  username            String    @unique
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  role                UserRole
+  status              UserStatus @default(ACTIVE)
+  profile             Json      @default("{}")
+  preferences         Json      @default("{}")
+  lastLoginAt         DateTime? @map("last_login_at")
+  passwordChangedAt   DateTime  @default(now()) @map("password_changed_at")
+  twoFactorEnabled    Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret     String?   @map("two_factor_secret")
+  deviceTokens        String[]  @default([]) @map("device_tokens")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  // Relations
+  agent               Agent?
+  client              Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId            String? @map("client_id")
+  apiKeys             ApiKey[]
+  sentMessages        Message[] @relation("MessageSender")
+  receivedMessages    Message[] @relation("MessageRecipient")
+  sentNotifications   Notification[] @relation("NotificationSender")
+  receivedNotifications Notification[] @relation("NotificationRecipient")
+  createdShifts       Shift[] @relation("ShiftCreator")
+  supervisedShifts    Shift[] @relation("ShiftSupervisor")
+  uploadedMedia       MediaFile[]
+  auditLogs           AuditLog[]
+  assignedRequests    ClientRequest[] @relation("RequestAssignee")
+  reviewedReports     Report[] @relation("ReportReviewer")
+  requestedTimeOff    TimeOffRequest[] @relation("TimeOffRequester")
+  approvedTimeOff     TimeOffRequest[] @relation("TimeOffApprover")
+  createdTemplates    ReportTemplate[] @relation("ReportTemplateCreator")
+  shiftAssignments    ShiftAssignment[] @relation("ShiftAssignedBy")
+  reportedIncidents   Incident[] @relation("IncidentReporter")
+  assignedIncidents   Incident[] @relation("IncidentAssignee")
+  incidentUpdates     IncidentUpdate[]
+  incidentAttachments IncidentAttachment[]
+  escalationsFrom     IncidentEscalation[] @relation("EscalationFrom")
+  escalationsTo       IncidentEscalation[] @relation("EscalationTo")
+  sentCommunications  Communication[] @relation("CommunicationSender")
+  receivedCommunications Communication[] @relation("CommunicationRecipient")
+  createdGroups       CommunicationGroup[]
+  groupMemberships    CommunicationGroupMember[]
+  createdTrainings    Training[]
+  enrolledTrainings   TrainingEnrollment[]
+  verifiedCertifications AgentCertification[]
+  skillAssessments    SkillAssessment[]
+  performanceReviews  PerformanceReview[]
+  approvedAttendance  AttendanceRecord[]
+  verifiedOnboarding  OnboardingCompletion[]
+
+  @@index([role])
+  @@index([status])
+  @@index([lastLoginAt])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Agent {
+  id                  String      @id @default(uuid())
+  userId              String      @unique @map("user_id")
+  employeeId          String      @unique @map("employee_id")
+  hireDate            DateTime    @map("hire_date")
+  employmentStatus    AgentStatus @default(ACTIVE) @map("employment_status")
+  skills              String[]    @default([])
+  certifications      Json        @default("[]")
+  emergencyContact    Json?       @map("emergency_contact")
+  performanceMetrics  Json        @default("{}") @map("performance_metrics")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  deletedAt           DateTime?   @map("deleted_at")
+
+  // Relations
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shifts              Shift[]
+  attendance          Attendance[]
+  locationTracking    LocationTracking[]
+  reports             Report[]
+  timeOffRequests     TimeOffRequest[]
+  qrCodeScans         QRCodeScan[]
+  geofenceViolations  GeofenceViolation[]
+  shiftAssignments    ShiftAssignment[]
+  trainingEnrollments TrainingEnrollment[]
+  trainingCompletions TrainingCompletion[]
+  assessmentAttempts  AssessmentAttempt[]
+  agentCertifications AgentCertification[]
+  skillAssessments    SkillAssessment[]
+  performanceReviews  PerformanceReview[]
+  attendanceRecords   AttendanceRecord[]
+  onboardingCompletions OnboardingCompletion[]
+
+  @@index([employmentStatus])
+  @@index([hireDate])
+  @@index([createdAt])
+  @@map("agents")
+}
+
+model Client {
+  id              String       @id @default(uuid())
+  companyName     String       @map("company_name")
+  contactPerson   Json         @map("contact_person")
+  billingAddress  Json         @map("billing_address")
+  contractDetails Json?        @map("contract_details")
+  serviceLevel    String       @default("standard") @map("service_level")
+  status          ClientStatus @default(ACTIVE)
+  settings        Json         @default("{}")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
+
+  // Relations
+  sites           Site[]
+  users           User[]
+  requests        ClientRequest[]
+  reportTemplates ReportTemplate[]
+  incidents       Incident[]
+
+  @@map("clients")
+}
+
+model Site {
+  id                    String     @id @default(uuid())
+  clientId              String     @map("client_id")
+  name                  String
+  address               Json
+  coordinates           String     // PostGIS POINT as string
+  geofenceRadius        Int        @default(100) @map("geofence_radius")
+  geofenceCoordinates   String?    @map("geofence_coordinates") // PostGIS POLYGON as string
+  qrCode                String?    @unique @map("qr_code")
+  siteType              String     @default("commercial") @map("site_type")
+  accessInstructions    String?    @map("access_instructions")
+  emergencyContacts     Json       @default("[]") @map("emergency_contacts")
+  equipmentList         Json       @default("[]") @map("equipment_list")
+  status                SiteStatus @default(ACTIVE)
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
+  deletedAt             DateTime?  @map("deleted_at")
+
+  // Relations
+  client                Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  shifts                Shift[]
+  reports               Report[]
+  requests              ClientRequest[]
+  reportTemplates       ReportTemplate[]
+  qrCodes               QRCode[]
+  geofenceViolations    GeofenceViolation[]
+  geofenceValidations   GeofenceValidation[]
+  incidents             Incident[]
+  communications        Communication[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([siteType])
+  @@index([createdAt])
+  @@map("sites")
+}
+
+model Shift {
+  id                String           @id @default(uuid())
+  siteId            String           @map("site_id")
+  agentId           String?          @map("agent_id")
+  supervisorId      String?          @map("supervisor_id")
+  startTime         DateTime         @map("start_time")
+  endTime           DateTime         @map("end_time")
+  shiftType         ShiftType        @default(REGULAR) @map("shift_type")
+  status            ShiftStatus      @default(SCHEDULED)
+  requirements      Json             @default("{}")
+  notes             String?
+  assignedAt        DateTime?        @map("assigned_at")
+  assignmentScore   Float?           @map("assignment_score")
+  assignmentMethod  AssignmentMethod @default(MANUAL) @map("assignment_method")
+  priority          Priority         @default(NORMAL)
+  createdBy         String           @map("created_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  deletedAt         DateTime?        @map("deleted_at")
+
+  // Relations
+  site               Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  agent              Agent?              @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  supervisor         User?               @relation("ShiftSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  creator            User                @relation("ShiftCreator", fields: [createdBy], references: [id])
+  attendance         Attendance[]
+  reports            Report[]
+  mediaFiles         MediaFile[]
+  locationTracking   LocationTracking[]
+  geofenceViolations GeofenceViolation[]
+  assignments        ShiftAssignment[]
+
+  @@index([siteId])
+  @@index([agentId])
+  @@index([status])
+  @@index([startTime])
+  @@index([endTime])
+  @@index([shiftType])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("shifts")
+}
+
+model ShiftAssignment {
+  id                String           @id @default(uuid())
+  shiftId           String           @map("shift_id")
+  agentId           String           @map("agent_id")
+  assignmentScore   Float            @map("assignment_score")
+  assignmentMethod  AssignmentMethod @map("assignment_method")
+  assignmentReason  String?          @map("assignment_reason")
+  constraints       Json?            @default("{}")
+  assignedBy        String?          @map("assigned_by")
+  assignedAt        DateTime         @default(now()) @map("assigned_at")
+
+  // Relations
+  shift             Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  agent             Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  assignedByUser    User?            @relation("ShiftAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
+
+  @@map("shift_assignments")
+}
+
+model Attendance {
+  id              String            @id @default(uuid())
+  shiftId         String            @map("shift_id")
+  agentId         String            @map("agent_id")
+  clockInTime     DateTime?         @map("clock_in_time")
+  clockOutTime    DateTime?         @map("clock_out_time")
+  clockInLocation String?           @map("clock_in_location") // PostGIS POINT as string
+  clockOutLocation String?          @map("clock_out_location") // PostGIS POINT as string
+  clockInMethod   AttendanceMethod? @map("clock_in_method")
+  clockOutMethod  AttendanceMethod? @map("clock_out_method")
+  qrCodeScanned   String?           @map("qr_code_scanned")
+  totalHours      Decimal?          @map("total_hours") @db.Decimal(5, 2)
+  overtimeHours   Decimal           @default(0) @map("overtime_hours") @db.Decimal(5, 2)
+  breakDuration   Int               @default(0) @map("break_duration") // minutes
+  status          AttendanceStatus  @default(CLOCKED_IN)
+  notes           String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  shift           Shift             @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  agent           Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([shiftId])
+  @@index([agentId])
+  @@index([status])
+  @@index([clockInTime])
+  @@index([clockOutTime])
+  @@index([createdAt])
+  @@map("attendance")
+}
+
+model LocationTracking {
+  id              String    @id @default(uuid())
+  agentId         String    @map("agent_id")
+  shiftId         String?   @map("shift_id")
+  coordinates     String    // PostGIS POINT as string
+  accuracy        Decimal?  @db.Decimal(8, 2)
+  altitude        Decimal?  @db.Decimal(10, 2)
+  speed           Decimal?  @db.Decimal(8, 2)
+  heading         Decimal?  @db.Decimal(5, 2)
+  timestamp       DateTime
+  batteryLevel    Int?      @map("battery_level")
+  isMockLocation  Boolean   @default(false) @map("is_mock_location")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  agent           Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  shift           Shift?    @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@index([agentId])
+  @@index([shiftId])
+  @@index([timestamp])
+  @@index([createdAt])
+  @@map("location_tracking")
+}
+
+model Report {
+  id              String         @id @default(uuid())
+  shiftId         String         @map("shift_id")
+  siteId          String         @map("site_id")
+  agentId         String         @map("agent_id")
+  reportType      ReportType     @map("report_type")
+  title           String
+  content         Json
+  observations    String?
+  incidents       Json           @default("[]")
+  weatherConditions String?      @map("weather_conditions")
+  equipmentStatus String?        @map("equipment_status")
+  status          ReportStatus   @default(DRAFT)
+  submittedAt     DateTime?      @map("submitted_at")
+  reviewedBy      String?        @map("reviewed_by")
+  reviewedAt      DateTime?      @map("reviewed_at")
+  reviewerNotes   String?        @map("reviewer_notes")
+  clientSignature Json?          @map("client_signature")
+  requiresFollowup Boolean       @default(false) @map("requires_followup")
+  priority        ReportPriority @default(NORMAL)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  deletedAt       DateTime?      @map("deleted_at")
+
+  // Relations
+  shift           Shift          @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  site            Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  agent           Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  reviewer        User?          @relation("ReportReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  mediaFiles      MediaFile[]
+  workflows       ReportWorkflow[]
+
+  @@index([shiftId])
+  @@index([siteId])
+  @@index([agentId])
+  @@index([reportType])
+  @@index([status])
+  @@index([priority])
+  @@index([submittedAt])
+  @@index([createdAt])
+  @@map("reports")
+}
+
+model MediaFile {
+  id               String    @id @default(uuid())
+  reportId         String?   @map("report_id")
+  filename         String
+  originalFilename String    @map("original_filename")
+  filePath         String    @map("file_path")
+  fileUrl          String?   @map("file_url")
+  fileSize         BigInt    @map("file_size")
+  fileHash         String?   @map("file_hash")
+  mimeType         String    @map("mime_type")
+  fileType         MediaType @map("file_type")
+  category         String?   @map("category")
+  description      String?
+  isPublic         Boolean   @default(false) @map("is_public")
+  tags             String[]  @default([]) @map("tags")
+  metadata         Json?     @map("metadata")
+  thumbnails       Json[]    @default([]) @map("thumbnails")
+  location         String?   // PostGIS POINT as string
+  timestamp        DateTime?
+  uploadedBy       String    @map("uploaded_by")
+  shiftId          String?   @map("shift_id")
+  status           String    @default("ACTIVE") @map("status")
+  isDuplicate      Boolean   @default(false) @map("is_duplicate")
+  originalFileId   String?   @map("original_file_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  // Relations
+  report           Report?   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  shift            Shift?    @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  uploader         User      @relation(fields: [uploadedBy], references: [id])
+
+  @@map("media_files")
+}
+
+model Notification {
+  id          String               @id @default(uuid())
+  recipientId String               @map("recipient_id")
+  senderId    String?              @map("sender_id")
+  type        NotificationType
+  title       String
+  message     String
+  data        Json                 @default("{}")
+  channels    NotificationChannel[]
+  status      NotificationStatus   @default(PENDING)
+  scheduledAt DateTime             @default(now()) @map("scheduled_at")
+  sentAt      DateTime?            @map("sent_at")
+  readAt      DateTime?            @map("read_at")
+  createdAt   DateTime             @default(now()) @map("created_at")
+
+  // Relations
+  recipient   User                 @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender      User?                @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@map("notifications")
+}
+
+model Message {
+  id          String          @id @default(uuid())
+  senderId    String          @map("sender_id")
+  recipientId String          @map("recipient_id")
+  message     String
+  messageType MessageType     @default(TEXT) @map("message_type")
+  mediaId     String?         @map("media_id")
+  priority    MessagePriority @default(NORMAL)
+  status      MessageStatus   @default(SENT)
+  readAt      DateTime?       @map("read_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  sender      User            @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User            @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model ClientRequest {
+  id                    String          @id @default(uuid())
+  clientId              String          @map("client_id")
+  siteId                String          @map("site_id")
+  requestType           RequestType     @map("request_type")
+  title                 String
+  description           String
+  priority              RequestPriority @default(MEDIUM)
+  status                RequestStatus   @default(OPEN)
+  contactPerson         Json            @map("contact_person")
+  preferredResponseTime DateTime?       @map("preferred_response_time")
+  assignedTo            String?         @map("assigned_to")
+  resolutionNotes       String?         @map("resolution_notes")
+  resolvedAt            DateTime?       @map("resolved_at")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  client                Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site                  Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  assignee              User?           @relation("RequestAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  @@map("client_requests")
+}
+
+model TimeOffRequest {
+  id                String            @id @default(uuid())
+  agentId           String            @map("agent_id")
+  startDate         DateTime          @map("start_date")
+  endDate           DateTime          @map("end_date")
+  type              TimeOffType       @default(VACATION)
+  reason            String?
+  status            TimeOffStatus     @default(PENDING)
+  isRecurring       Boolean           @default(false) @map("is_recurring")
+  recurrencePattern Json?             @map("recurrence_pattern")
+  requestedBy       String            @map("requested_by")
+  approvedBy        String?           @map("approved_by")
+  approvedAt        DateTime?         @map("approved_at")
+  rejectedReason    String?           @map("rejected_reason")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  agent             Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  requester         User              @relation("TimeOffRequester", fields: [requestedBy], references: [id])
+  approver          User?             @relation("TimeOffApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@map("time_off_requests")
+}
+
+model ReportTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  reportType  String   @map("report_type")
+  fields      Json
+  isPublic    Boolean  @default(false) @map("is_public")
+  isActive    Boolean  @default(true) @map("is_active")
+  clientId    String?  @map("client_id")
+  siteId      String?  @map("site_id")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site        Site?    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  creator     User     @relation("ReportTemplateCreator", fields: [createdBy], references: [id])
+
+  @@map("report_templates")
+}
+
+model ReportWorkflow {
+  id        String   @id @default(uuid())
+  reportId  String   @map("report_id")
+  action    String
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  // Relations
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("report_workflows")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  action      String
+  tableName   String   @map("table_name")
+  recordId    String?  @map("record_id")
+  oldValues   Json?    @map("old_values")
+  newValues   Json?    @map("new_values")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  timestamp   DateTime @default(now())
+
+  // Relations
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model Incident {
+  id          String            @id @default(uuid())
+  title       String
+  description String?
+  type        IncidentType
+  priority    IncidentPriority
+  status      IncidentStatus    @default(OPEN)
+  severity    IncidentSeverity
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  reportedBy  String?           @map("reported_by")
+  assignedTo  String?           @map("assigned_to")
+  siteId      String?           @map("site_id")
+  clientId    String?           @map("client_id")
+  resolvedAt  DateTime?         @map("resolved_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  reporter     User?              @relation("IncidentReporter", fields: [reportedBy], references: [id], onDelete: SetNull)
+  assignee     User?              @relation("IncidentAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  site         Site?              @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  client       Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  updates      IncidentUpdate[]
+  attachments  IncidentAttachment[]
+  escalations  IncidentEscalation[]
+
+  @@index([type])
+  @@index([priority])
+  @@index([status])
+  @@index([severity])
+  @@index([reportedBy])
+  @@index([assignedTo])
+  @@index([siteId])
+  @@index([clientId])
+  @@index([createdAt])
+  @@map("incidents")
+}
+
+model IncidentUpdate {
+  id         String   @id @default(uuid())
+  incidentId String   @map("incident_id")
+  userId     String?  @map("user_id")
+  message    String
+  isInternal Boolean  @default(false) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("incident_updates")
+}
+
+model IncidentAttachment {
+  id         String   @id @default(uuid())
+  incidentId String   @map("incident_id")
+  fileName   String   @map("file_name")
+  fileUrl    String   @map("file_url")
+  fileSize   Int?     @map("file_size")
+  mimeType   String?  @map("mime_type")
+  uploadedBy String?  @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  uploader User?    @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([incidentId])
+  @@index([uploadedBy])
+  @@index([createdAt])
+  @@map("incident_attachments")
+}
+
+model IncidentEscalation {
+  id          String              @id @default(uuid())
+  incidentId  String              @map("incident_id")
+  fromUserId  String?             @map("from_user_id")
+  toUserId    String?             @map("to_user_id")
+  reason      String
+  status      EscalationStatus    @default(PENDING)
+  escalatedAt DateTime            @default(now()) @map("escalated_at")
+  resolvedAt  DateTime?           @map("resolved_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  fromUser User?    @relation("EscalationFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUser   User?    @relation("EscalationTo", fields: [toUserId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
+  @@index([escalatedAt])
+  @@map("incident_escalations")
+}
+
+model Communication {
+  id          String             @id @default(uuid())
+  type        CommunicationType
+  subject     String?
+  message     String
+  priority    CommunicationPriority @default(NORMAL)
+  status      CommunicationStatus   @default(SENT)
+  senderId    String?            @map("sender_id")
+  recipientId String?            @map("recipient_id")
+  groupId     String?            @map("group_id")
+  siteId      String?            @map("site_id")
+  scheduledAt DateTime?          @map("scheduled_at")
+  sentAt      DateTime?          @map("sent_at")
+  readAt      DateTime?          @map("read_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  sender    User?                    @relation("CommunicationSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient User?                    @relation("CommunicationRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  group     CommunicationGroup?      @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  site      Site?                    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  attachments CommunicationAttachment[]
+
+  @@index([type])
+  @@index([priority])
+  @@index([status])
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([groupId])
+  @@index([siteId])
+  @@index([createdAt])
+  @@map("communications")
+}
+
+model CommunicationGroup {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  creator      User?           @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  members      CommunicationGroupMember[]
+  communications Communication[]
+
+  @@index([isActive])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("communication_groups")
+}
+
+model CommunicationGroupMember {
+  id      String @id @default(uuid())
+  groupId String @map("group_id")
+  userId  String @map("user_id")
+  role    GroupMemberRole @default(MEMBER)
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  group CommunicationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@index([role])
+  @@map("communication_group_members")
+}
+
+model CommunicationAttachment {
+  id              String   @id @default(uuid())
+  communicationId String   @map("communication_id")
+  fileName        String   @map("file_name")
+  fileUrl         String   @map("file_url")
+  fileSize        Int?     @map("file_size")
+  mimeType        String?  @map("mime_type")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  communication Communication @relation(fields: [communicationId], references: [id], onDelete: Cascade)
+
+  @@index([communicationId])
+  @@index([createdAt])
+  @@map("communication_attachments")
+}
+
+model QRCode {
+  id            String    @id @default(uuid())
+  siteId        String    @map("site_id")
+  code          String    @unique
+  data          Json
+  expiresAt     DateTime  @map("expires_at")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deactivatedAt DateTime? @map("deactivated_at")
+
+  site  Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  scans QRCodeScan[]
+
+  @@map("qr_codes")
+}
+
+model QRCodeScan {
+  id               String    @id @default(uuid())
+  qrCodeId         String    @map("qr_code_id")
+  agentId          String?   @map("agent_id")
+  scanLocation     String?   @map("scan_location") // PostGIS POINT
+  locationValid    Boolean   @default(false) @map("location_valid")
+  distanceFromSite Float?    @map("distance_from_site")
+  success          Boolean   @default(false)
+  scannedAt        DateTime  @default(now()) @map("scanned_at")
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+  agent  Agent? @relation(fields: [agentId], references: [id])
+
+  @@map("qr_code_scans")
+}
+
+model GeofenceViolation {
+  id                String    @id @default(uuid())
+  agentId           String    @map("agent_id")
+  siteId            String    @map("site_id")
+  shiftId           String?   @map("shift_id")
+  violationType     String    @default("OUTSIDE_GEOFENCE") @map("violation_type")
+  distanceFromSite  Float?    @map("distance_from_site")
+  currentLocation   String?   @map("current_location") // PostGIS POINT
+  firstViolationAt  DateTime  @default(now()) @map("first_violation_at")
+  lastViolationAt   DateTime  @default(now()) @map("last_violation_at")
+  resolvedAt        DateTime? @map("resolved_at")
+  resolvedBy        String?   @map("resolved_by")
+  resolutionNotes   String?   @map("resolution_notes")
+
+  agent Agent @relation(fields: [agentId], references: [id])
+  site  Site  @relation(fields: [siteId], references: [id])
+  shift Shift? @relation(fields: [shiftId], references: [id])
+
+  @@map("geofence_violations")
+}
+
+model GeofenceValidation {
+  id                 String   @id @default(uuid())
+  siteId             String   @map("site_id")
+  location           String   @map("location") // PostGIS POINT
+  isWithinGeofence   Boolean  @default(false) @map("is_within_geofence")
+  distanceFromCenter Float?   @map("distance_from_center")
+  geofenceType       String   @default("circular") @map("geofence_type")
+  tolerance          Float    @default(0)
+  validatedAt        DateTime @default(now()) @map("validated_at")
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@map("geofence_validations")
+}
+
+model SystemConfiguration {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configurations")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  name        String    @map("name")
+  key         String    @unique @map("api_key")
+  userId      String    @map("user_id")
+  permissions String[]  @default([]) @map("permissions")
+  status      String    @default("ACTIVE") @map("status") // ACTIVE, INACTIVE, REVOKED
+  rateLimit   Int?      @map("rate_limit") // Requests per minute
+  expiresAt   DateTime? @map("expires_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  usageCount  Int       @default(0) @map("usage_count")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+// New Enums for Incident Management and Communication
+enum IncidentType {
+  SECURITY_BREACH
+  THEFT
+  VANDALISM
+  MEDICAL_EMERGENCY
+  FIRE
+  NATURAL_DISASTER
+  EQUIPMENT_FAILURE
+  UNAUTHORIZED_ACCESS
+  SUSPICIOUS_ACTIVITY
+  SAFETY_VIOLATION
+  OTHER
+}
+
+enum IncidentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  EMERGENCY
+}
+
+enum IncidentStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_REVIEW
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum IncidentSeverity {
+  MINOR
+  MODERATE
+  MAJOR
+  CRITICAL
+}
+
+enum EscalationStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+  CANCELLED
+}
+
+enum CommunicationType {
+  EMAIL
+  SMS
+  PUSH_NOTIFICATION
+  INTERNAL_MESSAGE
+  BROADCAST
+  EMERGENCY_ALERT
+}
+
+enum CommunicationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+  EMERGENCY
+}
+
+enum CommunicationStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum GroupMemberRole {
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+// Workforce Management Models
+model Training {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  type        TrainingType
+  category    String
+  duration    Int            // Duration in hours
+  isRequired  Boolean        @default(false) @map("is_required")
+  validityPeriod Int?        @map("validity_period") // Validity in months
+  materials   Json           @default("[]")
+  prerequisites String[]     @default([])
+  createdBy   String         @map("created_by")
+  isActive    Boolean        @default(true) @map("is_active")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  creator      User                @relation(fields: [createdBy], references: [id])
+  enrollments  TrainingEnrollment[]
+  completions  TrainingCompletion[]
+  assessments  TrainingAssessment[]
+
+  @@index([type])
+  @@index([category])
+  @@index([isRequired])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("trainings")
+}
+
+model TrainingEnrollment {
+  id          String              @id @default(uuid())
+  trainingId  String              @map("training_id")
+  agentId     String              @map("agent_id")
+  enrolledBy  String?             @map("enrolled_by")
+  status      EnrollmentStatus    @default(ENROLLED)
+  enrolledAt  DateTime            @default(now()) @map("enrolled_at")
+  dueDate     DateTime?           @map("due_date")
+  startedAt   DateTime?           @map("started_at")
+  completedAt DateTime?           @map("completed_at")
+  progress    Int                 @default(0) // Progress percentage
+  notes       String?
+
+  training    Training            @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  agent       Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  enrolledByUser User?            @relation(fields: [enrolledBy], references: [id], onDelete: SetNull)
+
+  @@unique([trainingId, agentId])
+  @@index([trainingId])
+  @@index([agentId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("training_enrollments")
+}
+
+model TrainingCompletion {
+  id          String   @id @default(uuid())
+  trainingId  String   @map("training_id")
+  agentId     String   @map("agent_id")
+  score       Float?   // Assessment score
+  passed      Boolean  @default(false)
+  completedAt DateTime @default(now()) @map("completed_at")
+  expiresAt   DateTime? @map("expires_at")
+  certificateUrl String? @map("certificate_url")
+  notes       String?
+
+  training    Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, agentId])
+  @@index([trainingId])
+  @@index([agentId])
+  @@index([passed])
+  @@index([completedAt])
+  @@index([expiresAt])
+  @@map("training_completions")
+}
+
+model TrainingAssessment {
+  id          String   @id @default(uuid())
+  trainingId  String   @map("training_id")
+  title       String
+  description String?
+  questions   Json     // Array of questions
+  passingScore Float   @default(70) @map("passing_score")
+  timeLimit   Int?     @map("time_limit") // Time limit in minutes
+  attempts    Int      @default(3) // Maximum attempts allowed
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  training    Training              @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  assessmentAttempts AssessmentAttempt[]
+
+  @@index([trainingId])
+  @@index([isActive])
+  @@map("training_assessments")
+}
+
+model AssessmentAttempt {
+  id           String   @id @default(uuid())
+  assessmentId String   @map("assessment_id")
+  agentId      String   @map("agent_id")
+  answers      Json     // Array of answers
+  score        Float
+  passed       Boolean
+  startedAt    DateTime @default(now()) @map("started_at")
+  completedAt  DateTime @map("completed_at")
+  timeSpent    Int      // Time spent in minutes
+
+  assessment   TrainingAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@index([agentId])
+  @@index([passed])
+  @@index([completedAt])
+  @@map("assessment_attempts")
+}
+
+model Certification {
+  id          String            @id @default(uuid())
+  name        String
+  description String?
+  issuingBody String            @map("issuing_body")
+  type        CertificationType
+  validityPeriod Int?           @map("validity_period") // Validity in months
+  requirements Json            @default("[]") // Requirements to obtain
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  agentCertifications AgentCertification[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("certifications")
+}
+
+model AgentCertification {
+  id              String    @id @default(uuid())
+  agentId         String    @map("agent_id")
+  certificationId String    @map("certification_id")
+  obtainedAt      DateTime  @map("obtained_at")
+  expiresAt       DateTime? @map("expires_at")
+  certificateNumber String? @map("certificate_number")
+  certificateUrl  String?   @map("certificate_url")
+  status          CertificationStatus @default(ACTIVE)
+  notes           String?
+  verifiedBy      String?   @map("verified_by")
+  verifiedAt      DateTime? @map("verified_at")
+
+  agent           Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  certification   Certification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  verifier        User?         @relation(fields: [verifiedBy], references: [id], onDelete: SetNull)
+
+  @@unique([agentId, certificationId])
+  @@index([agentId])
+  @@index([certificationId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("agent_certifications")
+}
+
+model SkillAssessment {
+  id          String           @id @default(uuid())
+  agentId     String           @map("agent_id")
+  skill       String
+  level       SkillLevel
+  assessedBy  String           @map("assessed_by")
+  assessedAt  DateTime         @default(now()) @map("assessed_at")
+  score       Float?           // Assessment score out of 100
+  notes       String?
+  validUntil  DateTime?        @map("valid_until")
+  status      AssessmentStatus @default(ACTIVE)
+
+  agent       Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  assessor    User             @relation(fields: [assessedBy], references: [id])
+
+  @@index([agentId])
+  @@index([skill])
+  @@index([level])
+  @@index([assessedAt])
+  @@index([status])
+  @@map("skill_assessments")
+}
+
+model PerformanceReview {
+  id          String           @id @default(uuid())
+  agentId     String           @map("agent_id")
+  reviewerId  String           @map("reviewer_id")
+  period      String           // e.g., "2024-Q1", "2024-01"
+  type        ReviewType
+  overallScore Float           @map("overall_score")
+  goals       Json             @default("[]")
+  achievements Json            @default("[]")
+  improvements Json            @default("[]")
+  feedback    String?
+  status      ReviewStatus     @default(DRAFT)
+  scheduledAt DateTime?        @map("scheduled_at")
+  conductedAt DateTime?        @map("conducted_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  agent       Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  reviewer    User             @relation(fields: [reviewerId], references: [id])
+
+  @@unique([agentId, period, type])
+  @@index([agentId])
+  @@index([reviewerId])
+  @@index([period])
+  @@index([type])
+  @@index([status])
+  @@map("performance_reviews")
+}
+
+model AttendanceRecord {
+  id              String           @id @default(uuid())
+  agentId         String           @map("agent_id")
+  date            DateTime         @db.Date
+  clockIn         DateTime?        @map("clock_in")
+  clockOut        DateTime?        @map("clock_out")
+  breakStart      DateTime?        @map("break_start")
+  breakEnd        DateTime?        @map("break_end")
+  totalHours      Float?           @map("total_hours")
+  overtimeHours   Float            @default(0) @map("overtime_hours")
+  status          WorkforceAttendanceStatus @default(PRESENT)
+  notes           String?
+  approvedBy      String?          @map("approved_by")
+  approvedAt      DateTime?        @map("approved_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  agent           Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  approver        User?            @relation(fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@unique([agentId, date])
+  @@index([agentId])
+  @@index([date])
+  @@index([status])
+  @@map("attendance_records")
+}
+
+model OnboardingTask {
+  id          String           @id @default(uuid())
+  title       String
+  description String?
+  category    String
+  order       Int              @default(0)
+  isRequired  Boolean          @default(true) @map("is_required")
+  estimatedDuration Int?       @map("estimated_duration") // Duration in hours
+  instructions Json            @default("[]")
+  resources   Json             @default("[]")
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  completions OnboardingCompletion[]
+
+  @@index([category])
+  @@index([order])
+  @@index([isRequired])
+  @@index([isActive])
+  @@map("onboarding_tasks")
+}
+
+model OnboardingCompletion {
+  id          String              @id @default(uuid())
+  taskId      String              @map("task_id")
+  agentId     String              @map("agent_id")
+  status      CompletionStatus    @default(NOT_STARTED)
+  startedAt   DateTime?           @map("started_at")
+  completedAt DateTime?           @map("completed_at")
+  notes       String?
+  verifiedBy  String?             @map("verified_by")
+  verifiedAt  DateTime?           @map("verified_at")
+
+  task        OnboardingTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agent       Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  verifier    User?               @relation(fields: [verifiedBy], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, agentId])
+  @@index([taskId])
+  @@index([agentId])
+  @@index([status])
+  @@map("onboarding_completions")
+}
+
+// New Enums for Workforce Management
+enum TrainingType {
+  ORIENTATION
+  SAFETY
+  TECHNICAL
+  COMPLIANCE
+  SOFT_SKILLS
+  CERTIFICATION_PREP
+  REFRESHER
+  SPECIALIZED
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum CertificationType {
+  SECURITY_LICENSE
+  FIRST_AID
+  CPR
+  FIRE_SAFETY
+  TECHNICAL
+  PROFESSIONAL
+  REGULATORY
+  INTERNAL
+}
+
+enum CertificationStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  REVOKED
+  PENDING_RENEWAL
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum AssessmentStatus {
+  ACTIVE
+  EXPIRED
+  PENDING_REVIEW
+  INVALID
+}
+
+enum ReviewType {
+  QUARTERLY
+  ANNUAL
+  PROBATIONARY
+  SPECIAL
+  EXIT
+}
+
+enum ReviewStatus {
+  DRAFT
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  APPROVED
+  REJECTED
+}
+
+enum WorkforceAttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EARLY_DEPARTURE
+  SICK_LEAVE
+  VACATION
+  PERSONAL_LEAVE
+  UNPAID_LEAVE
+  HOLIDAY
+}
+
+enum CompletionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  FAILED
+}

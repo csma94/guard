@@ -1,0 +1,66 @@
+{
+  "name": "bahinlink-workspace",
+  "version": "1.0.0",
+  "description": "BahinLink Workforce Management Solution - Full Stack Application",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "npm run start:both",
+    "start:fast": "npm run start:both:fast",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd admin-portal && npm start",
+    "start:frontend:fast": "cd admin-portal && npm run start:fast",
+    "start:both": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:both:fast": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"npm run start:backend\" \"npm run start:frontend:fast\"",
+    "dev": "npm run start:both",
+    "dev:fast": "npm run start:both:fast",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd admin-portal && npm start",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd admin-portal && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd admin-portal && npm test",
+    "test:watch": "cd backend && npm run test:watch",
+    "test:coverage": "cd backend && npm run test:coverage",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd admin-portal && npm run lint",
+    "lint:fix": "npm run lint:fix:backend && npm run lint:fix:frontend",
+    "lint:fix:backend": "cd backend && npm run lint:fix",
+    "lint:fix:frontend": "cd admin-portal && npm run lint -- --fix",
+    "install:all": "npm install && cd backend && npm install && cd ../admin-portal && npm install",
+    "clean": "npm run clean:backend && npm run clean:frontend",
+    "clean:backend": "cd backend && rm -rf node_modules dist",
+    "clean:frontend": "cd admin-portal && rm -rf node_modules build",
+    "db:generate": "cd backend && npm run db:generate",
+    "db:migrate": "cd backend && npm run db:migrate",
+    "db:migrate:prod": "cd backend && npm run db:migrate:prod",
+    "db:seed": "cd backend && npm run db:seed",
+    "db:studio": "cd backend && npm run db:studio",
+    "db:reset": "cd backend && npm run db:reset",
+    "docker:build": "cd backend && npm run docker:build",
+    "docker:run": "cd backend && npm run docker:run"
+  },
+  "keywords": [
+    "workforce-management",
+    "security",
+    "gps-tracking",
+    "mobile-api",
+    "real-time"
+  ],
+  "author": "BahinLink Development Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "npm-run-all": "^4.1.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "workspaces": [
+    "backend",
+    "admin-portal"
+  ]
+}

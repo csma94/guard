@@ -1,0 +1,201 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bahinlink-admin-portal
+  namespace: bahinlink
+  labels:
+    app: bahinlink-admin-portal
+    tier: frontend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: bahinlink-admin-portal
+  template:
+    metadata:
+      labels:
+        app: bahinlink-admin-portal
+        tier: frontend
+    spec:
+      containers:
+      - name: admin-portal
+        image: bahinlink/admin-portal:latest
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: REACT_APP_API_URL
+          value: "https://api.bahinlink.com/api"
+        - name: REACT_APP_CLERK_PUBLISHABLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: bahinlink-secrets
+              key: clerk-publishable-key
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      imagePullSecrets:
+      - name: bahinlink-registry-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bahinlink-admin-portal-service
+  namespace: bahinlink
+  labels:
+    app: bahinlink-admin-portal
+spec:
+  selector:
+    app: bahinlink-admin-portal
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bahinlink-client-portal
+  namespace: bahinlink
+  labels:
+    app: bahinlink-client-portal
+    tier: frontend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: bahinlink-client-portal
+  template:
+    metadata:
+      labels:
+        app: bahinlink-client-portal
+        tier: frontend
+    spec:
+      containers:
+      - name: client-portal
+        image: bahinlink/client-portal:latest
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: REACT_APP_API_URL
+          value: "https://api.bahinlink.com/api"
+        - name: REACT_APP_CLERK_PUBLISHABLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: bahinlink-secrets
+              key: clerk-publishable-key
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      imagePullSecrets:
+      - name: bahinlink-registry-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bahinlink-client-portal-service
+  namespace: bahinlink
+  labels:
+    app: bahinlink-client-portal
+spec:
+  selector:
+    app: bahinlink-client-portal
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bahinlink-admin-portal-hpa
+  namespace: bahinlink
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bahinlink-admin-portal
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bahinlink-client-portal-hpa
+  namespace: bahinlink
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bahinlink-client-portal
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

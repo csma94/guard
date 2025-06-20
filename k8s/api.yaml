@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: bahinlink
+data:
+  NODE_ENV: "production"
+  PORT: "3001"
+  JWT_EXPIRES_IN: "15m"
+  JWT_REFRESH_EXPIRES_IN: "7d"
+  BCRYPT_ROUNDS: "12"
+  CORS_ORIGIN: "*"
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+  UPLOAD_PATH: "/app/uploads"
+  MAX_FILE_SIZE: "10MB"
+  LOG_LEVEL: "info"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-secret
+  namespace: bahinlink
+type: Opaque
+data:
+  DATABASE_URL: cG9zdGdyZXNxbDovL2JhaGlubGlua191c2VyOnNlY3VyZV9wYXNzd29yZEBwb3N0Z3Jlcy1zZXJ2aWNlOjU0MzIvYmFoaW5saW5r # base64 encoded DATABASE_URL
+  REDIS_URL: cmVkaXM6Ly86cmVkaXNfcGFzc3dvcmRAcmVkaXMtc2VydmljZTo2Mzc5 # base64 encoded REDIS_URL
+  JWT_SECRET: eW91ci1zdXBlci1zZWN1cmUtand0LXNlY3JldC1rZXk= # base64 encoded JWT secret
+  JWT_REFRESH_SECRET: eW91ci1zdXBlci1zZWN1cmUtcmVmcmVzaC1zZWNyZXQta2V5 # base64 encoded refresh secret
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: api-uploads-pvc
+  namespace: bahinlink
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: bahinlink
+  labels:
+    app: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: bahinlink/api:latest
+        ports:
+        - containerPort: 3001
+        envFrom:
+        - configMapRef:
+            name: api-config
+        - secretRef:
+            name: api-secret
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: /app/uploads
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+      volumes:
+      - name: uploads-storage
+        persistentVolumeClaim:
+          claimName: api-uploads-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: bahinlink
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 3001
+    targetPort: 3001
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+  namespace: bahinlink
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

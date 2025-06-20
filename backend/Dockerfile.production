@@ -1,0 +1,90 @@
+# Multi-stage production Dockerfile for BahinLink Backend
+# Stage 1: Build stage
+FROM node:18-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
+    curl
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy source code
+COPY src/ ./src/
+COPY prisma/ ./prisma/
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build the application
+RUN npm run build
+
+# Remove development dependencies
+RUN npm prune --production
+
+# Stage 2: Production stage
+FROM node:18-alpine AS production
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S bahinlink -u 1001
+
+# Install production dependencies
+RUN apk add --no-cache \
+    dumb-init \
+    curl \
+    ca-certificates \
+    tzdata
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application from builder stage
+COPY --from=builder --chown=bahinlink:nodejs /app/dist ./dist
+COPY --from=builder --chown=bahinlink:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=bahinlink:nodejs /app/package*.json ./
+COPY --from=builder --chown=bahinlink:nodejs /app/prisma ./prisma
+
+# Copy additional production files
+COPY --chown=bahinlink:nodejs scripts/start.sh ./scripts/
+COPY --chown=bahinlink:nodejs scripts/health-check.sh ./scripts/
+COPY --chown=bahinlink:nodejs .env.production ./.env
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/uploads /app/temp && \
+    chown -R bahinlink:nodejs /app/logs /app/uploads /app/temp
+
+# Make scripts executable
+RUN chmod +x ./scripts/start.sh ./scripts/health-check.sh
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV WS_PORT=3001
+
+# Expose ports
+EXPOSE 3000 3001 9090
+
+# Switch to non-root user
+USER bahinlink
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ./scripts/health-check.sh
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["./scripts/start.sh"]

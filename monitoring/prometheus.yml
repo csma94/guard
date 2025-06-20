@@ -1,0 +1,262 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'bahinlink-production'
+    environment: 'production'
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Backend API metrics
+  - job_name: 'bahinlink-backend'
+    static_configs:
+      - targets: ['backend:3000']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # PostgreSQL metrics
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Redis metrics
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Nginx metrics
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Elasticsearch metrics
+  - job_name: 'elasticsearch-exporter'
+    static_configs:
+      - targets: ['elasticsearch-exporter:9114']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Kubernetes API server
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - default
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      insecure_skip_verify: true
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+  # Kubernetes nodes
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      insecure_skip_verify: true
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+
+  # Kubernetes pods
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - bahinlink-production
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+  # Kubernetes services
+  - job_name: 'kubernetes-services'
+    kubernetes_sd_configs:
+      - role: service
+        namespaces:
+          names:
+            - bahinlink-production
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+        action: replace
+        target_label: __scheme__
+        regex: (https?)
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: kubernetes_name
+
+  # Custom application metrics
+  - job_name: 'bahinlink-custom-metrics'
+    static_configs:
+      - targets: ['backend:3000']
+    scrape_interval: 15s
+    metrics_path: /api/metrics/custom
+    params:
+      format: ['prometheus']
+    basic_auth:
+      username: 'prometheus'
+      password: 'prometheus_password'
+
+  # Business metrics
+  - job_name: 'bahinlink-business-metrics'
+    static_configs:
+      - targets: ['backend:3000']
+    scrape_interval: 60s
+    metrics_path: /api/metrics/business
+    params:
+      format: ['prometheus']
+    basic_auth:
+      username: 'prometheus'
+      password: 'prometheus_password'
+
+  # Security metrics
+  - job_name: 'bahinlink-security-metrics'
+    static_configs:
+      - targets: ['backend:3000']
+    scrape_interval: 30s
+    metrics_path: /api/metrics/security
+    params:
+      format: ['prometheus']
+    basic_auth:
+      username: 'prometheus'
+      password: 'prometheus_password'
+
+  # Performance metrics
+  - job_name: 'bahinlink-performance-metrics'
+    static_configs:
+      - targets: ['backend:3000']
+    scrape_interval: 15s
+    metrics_path: /api/metrics/performance
+    params:
+      format: ['prometheus']
+    basic_auth:
+      username: 'prometheus'
+      password: 'prometheus_password'
+
+  # External service monitoring
+  - job_name: 'external-services'
+    static_configs:
+      - targets: 
+        - 'api.bahinlink.com'
+        - 'admin.bahinlink.com'
+        - 'client.bahinlink.com'
+    scrape_interval: 60s
+    metrics_path: /health
+    scheme: https
+    params:
+      module: [http_2xx]
+
+# Recording rules for aggregated metrics
+recording_rules:
+  - name: bahinlink.rules
+    rules:
+      - record: bahinlink:request_rate_5m
+        expr: rate(http_requests_total[5m])
+      
+      - record: bahinlink:error_rate_5m
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])
+      
+      - record: bahinlink:response_time_p95_5m
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+      
+      - record: bahinlink:active_users_5m
+        expr: increase(user_sessions_total[5m])
+      
+      - record: bahinlink:shift_completion_rate_1h
+        expr: increase(shifts_completed_total[1h]) / increase(shifts_total[1h])
+      
+      - record: bahinlink:incident_rate_1h
+        expr: increase(incidents_total[1h])
+      
+      - record: bahinlink:system_cpu_usage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+      
+      - record: bahinlink:system_memory_usage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+      
+      - record: bahinlink:database_connections
+        expr: pg_stat_database_numbackends
+      
+      - record: bahinlink:redis_memory_usage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100

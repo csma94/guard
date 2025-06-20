@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bahinlink
+  labels:
+    name: bahinlink
+    app: bahinlink
+    environment: production
